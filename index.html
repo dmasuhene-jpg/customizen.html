@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>CustomiZen — Demo Single File</title>
+<style>
+  :root{--accent:#0ea5e9;--muted:#6b7280}
+  body{font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial; margin:0;background:#f8fafc;color:#0f172a}
+  header{background:linear-gradient(90deg,var(--accent),#06b6d4);color:white;padding:18px 20px;display:flex;justify-content:space-between;align-items:center}
+  h1{margin:0;font-size:20px}
+  .nav button{background:transparent;border:0;color:inherit;margin-left:10px;cursor:pointer;font-weight:600}
+  .container{max-width:1100px;margin:18px auto;padding:0 16px}
+  .grid{display:grid;gap:14px}
+  .product{background:white;border-radius:8px;padding:12px;box-shadow:0 2px 6px rgba(2,6,23,0.06);display:flex;flex-direction:column}
+  .product img{height:160px;object-fit:cover;border-radius:6px}
+  .row{display:flex;gap:12px;align-items:center}
+  .btn{background:var(--accent);color:white;border:0;padding:8px 12px;border-radius:6px;cursor:pointer}
+  .btn-outline{background:white;border:1px solid #e6eef4;color:var(--accent)}
+  .muted{color:var(--muted);font-size:13px}
+  input,textarea,select{padding:8px;border:1px solid #e6eef4;border-radius:6px;width:100%;box-sizing:border-box}
+  footer{padding:18px;text-align:center;color:var(--muted);font-size:13px}
+  .admin-panel{background:#fff7ed;border:1px dashed #f59e0b;padding:12px;border-radius:8px}
+  .badge{background:#e6f6fb;color:#03626b;padding:4px 8px;border-radius:20px;font-size:12px}
+  .small{font-size:13px}
+  .modal{position:fixed;inset:0;background:rgba(2,6,23,0.5);display:flex;align-items:center;justify-content:center;padding:16px}
+  .card{background:white;padding:16px;border-radius:8px;max-width:900px;width:100%;box-shadow:0 8px 30px rgba(2,6,23,0.12)}
+  table{width:100%;border-collapse:collapse}
+  td,th{padding:8px;border-bottom:1px solid #eef2f7}
+  .flex{display:flex;gap:8px}
+  .col-3{grid-template-columns:repeat(3,1fr)}
+  .col-2{grid-template-columns:repeat(2,1fr)}
+  @media(max-width:800px){.col-3{grid-template-columns:1fr}.row{flex-direction:column;align-items:stretch}}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>CustomiZen <span class="badge">Vendor Demo</span></h1>
+    <div class="muted">Custom gifts & corporate packages — single-file demo</div>
+  </div>
+  <nav class="nav">
+    <button id="nav-home">Home</button>
+    <button id="nav-products">Products</button>
+    <button id="nav-cart">Cart (<span id="cart-count">0</span>)</button>
+    <button id="nav-admin">Admin</button>
+  </nav>
+</header>
+
+<main class="container" id="app">
+  <!-- content injected here -->
+</main>
+
+<footer>© <span id="year"></span> CustomiZen — Demo. Edit in Admin. For production, wire server APIs and secure keys.</footer>
+
+<!-- Single-file JS application -->
+<script>
+/*
+  CustomiZen Single HTML App
+  - Save as customizen.html and open in your browser
+  - Admin -> Edit products, enable payment methods, set API endpoints
+  - Orders & products persist to localStorage
+  - 'Pay now' buttons simulate or call configured endpoints via fetch
+*/
+
+/* ---------------------------
+   Initial data & helpers
+   --------------------------- */
+const YEAR = new Date().getFullYear();
+document.getElementById('year').textContent = YEAR;
+
+const SAMPLE_PRODUCTS = [
+  { id: "pkg-001", name: "Executive Gift Set", price: 980, eta: "3-4 days", items: ["Desk Organizer","Bamboo Flask","Cufflinks","Wallet","Glasses"], minQty:1, description: "Premium corporate gift set — customizable engraving and branding.", image: "https://placehold.co/600x400?text=Executive+Gift+Set" },
+  { id: "pkg-002", name: "Classic Wooden Set", price: 515, eta: "5-8 days", items:["Bamboo Flask","Wooden Diary and Pen","Men's Long Wallet","Wooden Keyring"], minQty:1, description: "Warm wooden textures for a natural, classy look.", image:"https://placehold.co/600x400?text=Classic+Wooden+Set" },
+  { id: "prod-001", name: "Custom White Mug", price: 65, eta: "3-4 days", items:["Ceramic Mug"], minQty:1, description: "White ceramic mug — print your logo or message.", image:"https://placehold.co/600x400?text=White+Mug" },
+  { id: "prod-002", name: "Bamboo Flask (bulk)", price: 200, eta: "3-4 days", items:["Bamboo Flask"], minQty:20, description: "MOQ 20 for bulk pricing.", image:"https://placehold.co/600x400?text=Bamboo+Flask" }
+];
+
+const ALL_PAYMENT_METHODS = [
+  "Visa","Mastercard","American Express","Discover","UnionPay",
+  "PayPal","Stripe (cards & wallets)","Adyen","Square","Authorize.Net",
+  "Bank Transfer (SWIFT)","SEPA (Euro bank transfer)","ACH (US)",
+  "MTN Mobile Money","AirtelTigo Money","Vodafone Cash","M-Pesa","Orange Money",
+  "Apple Pay","Google Pay","Samsung Pay","Alipay","WeChat Pay","Paytm",
+  "Klarna","Afterpay","Affirm",
+  "Bitcoin","Ethereum","USDC / Stablecoins",
+  "QR Payment (scan-to-pay)","POS Terminal (chip & PIN)",
+  "Cash Pickup","Cash on Delivery (COD)"
+];
+
+/* Storage wrapper */
+const STORE_KEYS = { products: 'cz_products_v1', payments: 'cz_payments_v1', orders: 'cz_orders_v1', config:'cz_config_v1' };
+function load(key, fallback){ try{ const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }catch(e){ return fallback; } }
+function save(key, val){ localStorage.setItem(key, JSON.stringify(val)); }
+
+/* initialize data */
+let products = load(STORE_KEYS.products, SAMPLE_PRODUCTS);
+let enabledPayments = load(STORE_KEYS.payments, ["Visa","Mastercard","PayPal","MTN Mobile Money","Cash on Delivery (COD)"]);
+let orders = load(STORE_KEYS.orders, []);
+let config = load(STORE_KEYS.config, {
+  // in Admin, vendor can set "real" API endpoints to use in checkout
+  stripeCheckoutEndpoint: "", // e.g. https://yourapi.vercel.app/api/stripe/create-checkout-session
+  paypalCreateOrderEndpoint: "",
+  momoCollectEndpoint: "",
+  // a flag to run in "simulate" mode (no network calls) — default true for safety/demo
+  simulatePayments: true
+});
+
+/* utilities */
+function uid(prefix='id'){ return prefix + '-' + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+function currency(n){ return 'Ghc ' + Number(n).toLocaleString(); }
+function updateCartCount(){ document.getElementById('cart-count').textContent = cart.length; }
+function exportCSV(filename, rows, headers){
+  const csv = [headers.join(','), ...rows.map(r=> headers.map(h=> `"${(r[h]??'').toString().replace(/"/g,'""')}"`).join(','))].join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+}
+
+/* cart state (kept in-memory) */
+let cart = [];
+
+/* ---------------------------
+   Rendering & Pages
+   --------------------------- */
+
+const app = document.getElementById('app');
+
+function render(){
+  // basic header area done — now show content based on route
+  const route = currentRoute;
+  if(route==='home') renderHome();
+  else if(route==='products') renderProducts();
+  else if(route==='cart') renderCart();
+  else if(route==='admin') renderAdmin();
+  else if(route==='orders') renderOrders();
+  else renderHome();
+}
+
+/* Home */
+function renderHome(){
+  app.innerHTML = `
+    <section class="grid col-2" style="grid-template-columns:1fr 420px;gap:18px">
+      <div>
+        <h2 style="margin:0 0 8px 0">Welcome to CustomiZen</h2>
+        <div class="muted">Customize corporate gifts, order in bulk, and manage products directly from this Admin demo.</div>
+        <div style="margin-top:14px" id="featured-products"></div>
+      </div>
+      <aside class="product admin-panel">
+        <div style="font-weight:700">Quick Actions (Admin)</div>
+        <div class="small muted" style="margin-top:8px">Use the Admin tab to edit products, enable payment methods, and set API endpoints.</div>
+        <div style="margin-top:10px" class="flex">
+          <button class="btn" id="go-products">See products</button>
+          <button class="btn-outline" id="go-admin">Open Admin</button>
+        </div>
+      </aside>
+    </section>
+  `;
+  // featured products
+  const fp = document.getElementById('featured-products');
+  fp.innerHTML = '<div class="grid col-3" style="grid-template-columns:repeat(3,1fr);margin-top:12px"></div>';
+  const grid = fp.querySelector('.grid');
+  products.slice(0,6).forEach(p=>{
+    const el = document.createElement('div'); el.className='product';
+    el.innerHTML = `<img src="${p.image}" alt="${escapeHtml(p.name)}"><h3 style="margin:8px 0">${escapeHtml(p.name)}</h3><div class="muted">${escapeHtml(p.items.join(', '))}</div><div style="margin-top:10px" class="row"><strong>${currency(p.price)}</strong><div style="flex:1"></div><button class="btn" data-add="${p.id}">Add</button></div>`;
+    grid.appendChild(el);
+  });
+  // events
+  document.querySelectorAll('[data-add]').forEach(btn=> btn.onclick = ()=>{ const p = products.find(x=>x.id===btn.getAttribute('data-add')); addToCart(p); });
+  document.getElementById('go-products').onclick = ()=> navigate('products');
+  document.getElementById('go-admin').onclick = ()=> navigate('admin');
+}
+
+/* Products page */
+function renderProducts(){
+  app.innerHTML = `<h2>Products & Packages</h2><div class="grid col-3" style="grid-template-columns:repeat(3,1fr);margin-top:10px" id="prod-grid"></div>`;
+  const grid = document.getElementById('prod-grid');
+  products.forEach(p=>{
+    const card = document.createElement('div'); card.className='product';
+    card.innerHTML = `
+      <img src="${p.image}" alt="${escapeHtml(p.name)}">
+      <div style="margin-top:8px"><strong>${escapeHtml(p.name)}</strong></div>
+      <div class="muted">${escapeHtml(p.description)}</div>
+      <div style="margin-top:8px" class="row"><div><strong>${currency(p.price)}</strong><div class="muted" style="font-size:12px">ETA: ${escapeHtml(p.eta)}</div></div><div style="flex:1"></div>
+      <div class="flex"><button class="btn" data-add="${p.id}">Add</button><button class="btn-outline" data-edit="${p.id}">Edit</button></div></div>
+    `;
+    grid.appendChild(card);
+  });
+  // listeners
+  grid.querySelectorAll('[data-add]').forEach(b=> b.onclick = ()=> addToCart(products.find(x=>x.id===b.getAttribute('data-add'))));
+  grid.querySelectorAll('[data-edit]').forEach(b=> b.onclick = ()=> openEditProduct(b.getAttribute('data-edit')));
+}
+
+/* Cart page & checkout */
+function renderCart(){
+  const total = cart.reduce((s,i)=>s + i.qty * i.price, 0);
+  app.innerHTML = `
+    <h2>Cart</h2>
+    <div class="card" style="margin-top:12px">
+      <div id="cart-items"></div>
+      <div style="margin-top:12px" class="row"><div><strong>Total: ${currency(total)}</strong></div><div style="flex:1"></div></div>
+      <div style="margin-top:14px">
+        <h3 class="small">Customer details</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <input id="cust-name" placeholder="Full name">
+          <input id="cust-phone" placeholder="Phone">
+          <input id="cust-email" placeholder="Email (optional)">
+          <input id="cust-address" placeholder="Delivery address">
+        </div>
+        <div style="margin-top:8px;">
+          <label class="small">Payment method</label>
+          <select id="cust-payment" style="margin-top:6px;padding:8px;border-radius:6px;border:1px solid #e6eef4;width:100%"></select>
+        </div>
+        <div style="margin-top:12px" class="flex">
+          <button class="btn" id="place-order">Place order (creates order record)</button>
+          <button class="btn-outline" id="pay-now">Pay now (simulate or call configured API)</button>
+        </div>
+      </div>
+    </div>
+  `;
+  const itemsDiv = document.getElementById('cart-items');
+  if(cart.length===0) itemsDiv.innerHTML = '<div class="muted">Your cart is empty</div>';
+  else {
+    itemsDiv.innerHTML = '<table><thead><tr><th>Item</th><th>Qty</th><th>Price</th><th></th></tr></thead><tbody>' + cart.map(item=>`<tr data-id="${item.id}"><td>${escapeHtml(item.name)}</td><td>${item.qty}</td><td>${currency(item.price*item.qty)}</td><td><button data-remove="${item.id}">Remove</button></td></tr>`).join('') + '</tbody></table>';
+    itemsDiv.querySelectorAll('[data-remove]').forEach(b=> b.onclick = ()=> { const id=b.getAttribute('data-remove'); cart = cart.filter(c=>c.id!==id); render(); updateCartCount(); });
+  }
+  // payment methods select
+  const sel = document.getElementById('cust-payment');
+  enabledPayments.forEach(m=> { const opt = document.createElement('option'); opt.value=m; opt.textContent=m; sel.appendChild(opt); });
+  // actions
+  document.getElementById('place-order').onclick = ()=> {
+    const cust = { name: document.getElementById('cust-name').value.trim(), phone: document.getElementById('cust-phone').value.trim(), email: document.getElementById('cust-email').value.trim(), address: document.getElementById('cust-address').value.trim(), paymentMethod: sel.value };
+    if(!cust.name || !cust.phone){ alert('Please enter name and phone'); return; }
+    const order = { id: uid('ORD'), createdAt: new Date().toISOString(), items: cart.map(i=>({id:i.id,name:i.name,qty:i.qty,price:i.price})), total: cart.reduce((s,i)=>s+i.price*i.qty,0), customer: cust, paymentMethod: sel.value, status:'pending' };
+    orders.unshift(order); save(STORE_KEYS.orders, orders);
+    cart = []; updateCartCount(); render();
+    alert('Order created (mock). You can manage orders in Admin.');
+  };
+
+  document.getElementById('pay-now').onclick = async ()=>{
+    const cust = { name: document.getElementById('cust-name').value.trim(), phone: document.getElementById('cust-phone').value.trim(), email: document.getElementById('cust-email').value.trim(), address: document.getElementById('cust-address').value.trim(), paymentMethod: document.getElementById('cust-payment').value };
+    if(cart.length===0){ alert('Cart empty'); return; }
+    if(config.simulatePayments){ // simulate
+      const order = { id: uid('ORD'), createdAt: new Date().toISOString(), items: cart.map(i=>({id:i.id,name:i.name,qty:i.qty,price:i.price})), total: cart.reduce((s,i)=>s+i.price*i.qty,0), customer:cust, paymentMethod:cust.paymentMethod, status:'paid', paymentMeta:{ mode:'simulated' } };
+      orders.unshift(order); save(STORE_KEYS.orders, orders); cart=[]; updateCartCount(); render(); alert('Payment simulated: order created and marked paid.'); return;
+    }
+    // If not simulating, attempt to call configured endpoints based on payment method
+    try{
+      const pm = cust.paymentMethod.toLowerCase();
+      const payload = { items: cart.map(i=>({name:i.name,qty:i.qty,price:i.price})), total: cart.reduce((s,i)=>s+i.price*i.qty,0), customer: cust, orderId: uid('ORD') };
+      if(pm.includes('stripe')) await callEndpoint(config.stripeCheckoutEndpoint, payload);
+      else if(pm.includes('paypal')) await callEndpoint(config.paypalCreateOrderEndpoint, payload);
+      else if(pm.includes('momo') || pm.includes('mobile money') || pm.includes('mpesa')) await callEndpoint(config.momoCollectEndpoint, payload);
+      else await callEndpoint(config.stripeCheckoutEndpoint || config.paypalCreateOrderEndpoint || config.momoCollectEndpoint, payload);
+      // if endpoint returns success we create order and mark pending (webhook will update in real flow)
+      const order = { id: payload.orderId, createdAt: new Date().toISOString(), items: payload.items, total: payload.total, customer:cust, paymentMethod:cust.paymentMethod, status:'pending', paymentMeta:{ called:true } };
+      orders.unshift(order); save(STORE_KEYS.orders, orders); cart = []; updateCartCount(); render(); alert('Requested payment endpoint — order created (pending). Check Admin orders to follow up with webhooks).');
+    }catch(err){ alert('Payment request failed: ' + err.message) }
+  };
+}
+
+/* Admin page */
+function renderAdmin(){
+  app.innerHTML = `
+    <h2>Admin / Vendor Panel</h2>
+    <div class="card" style="margin-top:12px">
+      <div style="display:grid;grid-template-columns:1fr 320px;gap:12px">
+        <div>
+          <h3>Products (edit live)</h3>
+          <div id="admin-products" style="margin-top:8px"></div>
+          <div style="margin-top:8px" class="flex">
+            <button class="btn" id="add-product">Add product</button>
+            <button class="btn-outline" id="export-products">Export CSV</button>
+          </div>
+
+          <h3 style="margin-top:16px">Orders</h3>
+          <div style="margin-top:8px" id="admin-orders"></div>
+        </div>
+
+        <aside>
+          <h3>Payments & Integrations</h3>
+          <div style="height:300px;overflow:auto;border:1px solid #eef2f7;padding:8px;border-radius:6px;margin-top:8px" id="payments-list"></div>
+          <div style="margin-top:10px">
+            <label class="small">Simulate payments (safe demo)</label>
+            <div class="muted" style="margin-top:4px">When ON, all payments are simulated locally. Turn OFF to call configured API endpoints below.</div>
+            <div style="margin-top:8px" class="flex">
+              <label><input type="checkbox" id="cfg-simulate"> Simulate</label>
+            </div>
+          </div>
+
+          <h4 style="margin-top:12px">API endpoints (set vendor server URLs)</h4>
+          <div style="display:grid;gap:6px;margin-top:8px">
+            <input id="cfg-stripe" placeholder="Stripe checkout endpoint (POST)">
+            <input id="cfg-paypal" placeholder="PayPal create-order endpoint (POST)">
+            <input id="cfg-momo" placeholder="MTN MoMo collect endpoint (POST)">
+            <div class="small muted">Example payload: { items:[{name,qty,price}], total, customer:{name,phone,email,address}, orderId }</div>
+            <div style="margin-top:8px" class="flex"><button id="save-config" class="btn">Save config</button></div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  `;
+  // products list
+  const list = document.getElementById('admin-products');
+  list.innerHTML = '';
+  products.forEach(p=>{
+    const row = document.createElement('div'); row.style.display='flex'; row.style.justifyContent='space-between'; row.style.padding='8px 0';
+    row.innerHTML = `<div><strong>${escapeHtml(p.name)}</strong><div class="muted small">${escapeHtml(p.description)} • ${currency(p.price)}</div></div><div class="flex"><button data-edit="${p.id}" class="btn-outline">Edit</button><button data-remove="${p.id}" class="btn-outline">Remove</button></div>`;
+    list.appendChild(row);
+  });
+  document.getElementById('add-product').onclick = ()=> openCreateProduct();
+  list.querySelectorAll('[data-edit]').forEach(b=> b.onclick = ()=> openEditProduct(b.getAttribute('data-edit')));
+  list.querySelectorAll('[data-remove]').forEach(b=> b.onclick = ()=> { if(confirm('Remove product?')){ products = products.filter(x=>x.id!==b.getAttribute('data-remove')); save(STORE_KEYS.products, products); render(); }});
+
+  // payments
+  const paymentsList = document.getElementById('payments-list');
+  paymentsList.innerHTML = ALL_PAYMENT_METHODS.map(m=>`<label style="display:block"><input type="checkbox" data-pay="${escapeHtml(m)}" ${enabledPayments.includes(m)?'checked':''}> ${escapeHtml(m)}</label>`).join('');
+  paymentsList.querySelectorAll('[data-pay]').forEach(cb=> cb.onchange = ()=> {
+    const method = cb.getAttribute('data-pay');
+    enabledPayments = cb.checked ? ([...new Set([method,...enabledPayments])]) : enabledPayments.filter(x=>x!==method);
+    save(STORE_KEYS.payments, enabledPayments);
+  });
+
+  // config fields
+  document.getElementById('cfg-stripe').value = config.stripeCheckoutEndpoint;
+  document.getElementById('cfg-paypal').value = config.paypalCreateOrderEndpoint;
+  document.getElementById('cfg-momo').value = config.momoCollectEndpoint;
+  document.getElementById('cfg-simulate').checked = !!config.simulatePayments;
+  document.getElementById('save-config').onclick = ()=> {
+    config.stripeCheckoutEndpoint = document.getElementById('cfg-stripe').value.trim();
+    config.paypalCreateOrderEndpoint = document.getElementById('cfg-paypal').value.trim();
+    config.momoCollectEndpoint = document.getElementById('cfg-momo').value.trim();
+    config.simulatePayments = document.getElementById('cfg-simulate').checked;
+    save(STORE_KEYS.config, config);
+    alert('Config saved');
+  };
+
+  // orders
+  const ao = document.getElementById('admin-orders');
+  if(orders.length===0) ao.innerHTML = '<div class="muted">No orders yet</div>'; else {
+    ao.innerHTML = orders.map(o=>`<div style="padding:8px;border-bottom:1px solid #eef2f7"><div style="display:flex;justify-content:space-between"><div><strong>${o.id}</strong> <span class="muted small">(${new Date(o.createdAt).toLocaleString()})</span><div class="muted small">${o.customer.name} • ${o.customer.phone}</div></div><div><select data-order="${o.id}"><option ${o.status==='pending'?'selected':''}>pending</option><option ${o.status==='paid'?'selected':''}>paid</option><option ${o.status==='processing'?'selected':''}>processing</option><option ${o.status==='shipped'?'selected':''}>shipped</option><option ${o.status==='delivered'?'selected':''}>delivered</option><option ${o.status==='cancelled'?'selected':''}>cancelled</option></select><button data-delete="${o.id}" class="btn-outline" style="margin-left:8px">Delete</button></div></div></div>`).join('');
+    ao.querySelectorAll('[data-delete]').forEach(b=> b.onclick = ()=> { if(confirm('Delete order?')){ orders = orders.filter(x=>x.id!==b.getAttribute('data-delete')); save(STORE_KEYS.orders, orders); render(); }});
+    ao.querySelectorAll('select[data-order]').forEach(s=> s.onchange = ()=> { const id=s.getAttribute('data-order'); orders = orders.map(o=> o.id===id?({...o,status:s.value}):o); save(STORE_KEYS.orders, orders); render(); });
+  }
+
+  document.getElementById('export-products').onclick = ()=> {
+    const headers = ['id','name','price','eta','minQty','description'];
+    exportCSV('products.csv', products.map(p=>({id:p.id,name:p.name,price:p.price,eta:p.eta,minQty:p.minQty,description:p.description})), headers);
+  };
+}
+
+/* Orders page (alternate view) */
+function renderOrders(){
+  app.innerHTML = `<h2>Orders</h2><div class="card">${orders.length===0?'<div class="muted">No orders</div>': '<table><thead><tr><th>Order</th><th>Customer</th><th>Total</th><th>Status</th></tr></thead><tbody>' + orders.map(o=>`<tr><td>${o.id}<div class="muted small">${new Date(o.createdAt).toLocaleString()}</div></td><td>${escapeHtml(o.customer.name)}<div class="muted small">${escapeHtml(o.customer.phone)}</div></td><td>${currency(o.total)}</td><td>${escapeHtml(o.status)}</td></tr>`).join('') + '</tbody></table>'}</div>`;
+}
+
+/* ---------------------------
+  Product editor modal
+   --------------------------- */
+let modalEl = null;
+function openCreateProduct(){
+  const p = { id: uid('prod'), name: 'New product', price: 100, eta: '3-5 days', items: [], minQty:1, description: '', image: 'https://placehold.co/600x400?text=New' };
+  openEditModal(p, true);
+}
+function openEditProduct(productId){
+  const p = products.find(x=>x.id===productId);
+  if(!p) return alert('Product not found');
+  openEditModal({...p}, false);
+}
+function openEditModal(product, isNew){
+  modalEl = document.createElement('div'); modalEl.className='modal';
+  modalEl.innerHTML = `<div class="card"><h3>${isNew?'Create':'Edit'} product</h3>
+    <div style="display:grid;gap:8px;margin-top:8px">
+      <input id="m-name" placeholder="Name" value="${escapeAttr(product.name)}">
+      <input id="m-price" placeholder="Price" value="${escapeAttr(product.price)}">
+      <input id="m-eta" placeholder="ETA" value="${escapeAttr(product.eta)}">
+      <input id="m-image" placeholder="Image URL" value="${escapeAttr(product.image)}">
+      <textarea id="m-desc" placeholder="Description">${escapeAttr(product.description)}</textarea>
+      <div class="flex" style="justify-content:flex-end">
+        <button id="m-save" class="btn">Save</button>
+        <button id="m-cancel" class="btn-outline">Cancel</button>
+      </div>
+    </div></div>`;
+  document.body.appendChild(modalEl);
+  document.getElementById('m-cancel').onclick = ()=> { modalEl.remove(); modalEl=null; };
+  document.getElementById('m-save').onclick = ()=> {
+    const updated = { ...product, name: document.getElementById('m-name').value.trim(), price: Number(document.getElementById('m-price').value || 0), eta: document.getElementById('m-eta').value.trim(), image: document.getElementById('m-image').value.trim(), description: document.getElementById('m-desc').value.trim() };
+    if(!updated.name){ alert('Name required'); return; }
+    if(isNew) products.unshift(updated); else products = products.map(p=> p.id===updated.id?updated:p);
+    save(STORE_KEYS.products, products);
+    modalEl.remove(); modalEl=null; render();
+  };
+}
+
+/* ---------------------------
+   Simple API caller for configured endpoints
+   --------------------------- */
+async function callEndpoint(url, payload){
+  if(!url) throw new Error('No endpoint configured (set in Admin).');
+  // POST JSON
+  const r = await fetch(url, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(payload) });
+  if(!r.ok) { const t = await r.text(); throw new Error('Endpoint error: ' + r.status + ' ' + t); }
+  return r.json ? await r.json() : await r.text();
+}
+
+/* ---------------------------
+   Cart & controls
+   --------------------------- */
+function addToCart(product, qty=1){
+  const p = { id: product.id, name: product.name, price: product.price, qty };
+  const existing = cart.find(c=>c.id===p.id);
+  if(existing) existing.qty += qty; else cart.push(p);
+  updateCartCount(); navigate('cart');
+}
+function clearCart(){ cart=[]; updateCartCount(); render(); }
+
+/* ---------------------------
+  Routing & nav
+   --------------------------- */
+let currentRoute = 'home';
+function navigate(route){ currentRoute=route; render(); window.scrollTo({top:0,behavior:'smooth'}); }
+document.getElementById('nav-home').onclick = ()=> navigate('home');
+document.getElementById('nav-products').onclick = ()=> navigate('products');
+document.getElementById('nav-cart').onclick = ()=> navigate('cart');
+document.getElementById('nav-admin').onclick = ()=> navigate('admin');
+
+/* ---------------------------
+  Helpers & safety
+   --------------------------- */
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=> ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function escapeAttr(s){ return String(s).replace(/"/g,'&quot;'); }
+
+/* ---------------------------
+  init & restore
+   --------------------------- */
+function init(){
+  // restore data
+  products = load(STORE_KEYS.products, SAMPLE_PRODUCTS);
+  enabledPayments = load(STORE_KEYS.payments, enabledPayments);
+  orders = load(STORE_KEYS.orders, orders);
+  config = load(STORE_KEYS.config, config);
+  // set simulate flag to true by default for safety in demo if missing
+  if(typeof config.simulatePayments === 'undefined') config.simulatePayments = true;
+  // set global cart count
+  updateCartCount();
+  // initial render
+  render();
+}
+init();
+
+/* ---------------------------
+  Small UX: allow dropping a JSON file to import products (optional)
+   --------------------------- */
+window.addEventListener('keydown', (e)=> {
+  if(e.key==='/' && (e.ctrlKey||e.metaKey)) { // quick shortcut to go to admin
+    navigate('admin'); e.preventDefault();
+  }
+});
+</script>
+
+</body>
+</html>
